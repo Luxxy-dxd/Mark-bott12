@@ -1,71 +1,52 @@
-module.exports.config = {
+module.exports = {
   name: "id",
   usePrefix: false,
-  usage: "id [@mention]",
-  version: "1.1",
+  usage: "id [@mention or reply or link or UID]",
+  version: "2.0",
   admin: false,
-  cooldown: 2
-};
+  cooldown: 5,
 
-module.exports.run = async function ({ api, event, usersData }) {
-  const { threadID, messageID, senderID, mentions } = event;
+  execute: async ({ api, event, args }) => {
+    const { threadID, messageID, senderID, mentions, type, messageReply } = event;
 
-  let uid;
-  let userName;
+    let targetID = senderID;
+    let targetName = "You";
 
-  if (Object.keys(mentions).length > 0) {
-    uid = Object.keys(mentions)[0];
-    userName = mentions[uid].replace("@", "");
-  } else {
-    uid = senderID;
-    userName = "You";
-  }
+    // Mentioned
+    if (Object.keys(mentions).length > 0) {
+      targetID = Object.keys(mentions)[0];
+      targetName = mentions[targetID].replace(/@/g, "");
+    }
 
-  try {
-    const userInfo = await api.getUserInfo(uid);
-    const user = userInfo[uid];
-    const avatarUrl = await usersData.getAvatarUrl(uid);
+    // Replied user
+    else if (type === "message_reply") {
+      targetID = messageReply.senderID;
+      targetName = messageReply.senderID === senderID ? "You" : "User from replied message";
+    }
 
-    const profileLink = user.profileUrl || `https://facebook.com/${uid}`;
-
-    const messageBody = `
-🔍 Facebook UID: ${uid}
-📛 Name: ${user.name}
-🔗 Profile: ${profileLink}
-    `.trim();
-
-    await api.sendMessage({
-      body: messageBody,
-      attachment: await global.utils.getStreamFromURL(avatarUrl),
-      buttons: [
-        {
-          type: "reply",
-          label: "🔄 Get My ID",
-          id: "ID_MYSELF"
-        },
-        {
-          type: "reply",
-          label: "🔍 Spy User",
-          id: `ID_SPY_${uid}`
+    // Direct UID or profile link
+    else if (args[0]) {
+      const arg = args[0];
+      if (/^\d{5,}$/.test(arg)) {
+        targetID = arg;
+        targetName = "User";
+      } else {
+        const match = arg.match(/id=(\d{5,})/); // profile.php?id=
+        if (match) {
+          targetID = match[1];
+          targetName = "User";
         }
+      }
+    }
+
+    const profileLink = `https://facebook.com/${targetID}`;
+
+    return api.sendMessage({
+      body: `🔍 UID Information\n\n👤 Name: ${targetName}\n🆔 UID: ${targetID}\n🔗 Profile: ${profileLink}`,
+      buttons: [
+        { label: "📋 Copy UID", type: "reply", payload: targetID },
+        { label: "🌐 View Profile", type: "url", url: profileLink }
       ]
     }, threadID, messageID);
-
-  } catch (error) {
-    return api.sendMessage("❌ Failed to fetch user info.", threadID, messageID);
-  }
-};
-
-module.exports.handleEvent = async function ({ api, event }) {
-  const { body, threadID, messageID, senderID } = event;
-
-  if (body === "ID_MYSELF") {
-    return module.exports.run({ api, event: { ...event, senderID, mentions: {} } });
-  }
-
-  if (body?.startsWith("ID_SPY_")) {
-    const uid = body.replace("ID_SPY_", "");
-    return api.sendMessage(`You chose to spy user: ${uid}`, threadID, messageID);
-    // You can call your spy command logic here instead
   }
 };
