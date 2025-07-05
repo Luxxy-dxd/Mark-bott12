@@ -6,73 +6,44 @@ module.exports = {
   name: "shoti",
   usePrefix: false,
   usage: "shoti",
-  version: "2.0",
-  cooldown: 5,
+  version: "1.2",
   admin: false,
+  cooldown: 5,
 
   execute: async ({ api, event }) => {
-    const { threadID, messageID, senderID } = event;
-    const filePath = path.join(__dirname, `tik-${senderID}.mp4`);
-    const apiUrl = "https://apis-rho-nine.vercel.app/tikrandom";
+    const { threadID, messageID } = event;
 
-    const sendVideo = async () => {
-      try {
-        api.setMessageReaction("⏳", messageID, () => {}, true);
+    try {
+      api.setMessageReaction("⏳", messageID, () => {}, true);
 
-        const response = await axios.get(apiUrl);
-        const videoUrl = response.data?.playUrl;
-
-        if (!videoUrl) {
-          api.setMessageReaction("❌", messageID, () => {}, true);
-          return api.sendMessage("⚠️ No video URL received from the API.", threadID, messageID);
-        }
-
-        const videoStream = await axios({
-          url: videoUrl,
-          method: "GET",
-          responseType: "stream",
-        });
-
-        const writer = fs.createWriteStream(filePath);
-        videoStream.data.pipe(writer);
-
-        writer.on("finish", () => {
-          api.setMessageReaction("✅", messageID, () => {}, true);
-
-          api.sendMessage(
-            {
-              body: `🎥 Here's your random TikTok video!`,
-              attachment: fs.createReadStream(filePath),
-              buttons: [
-                {
-                  label: "🔁 Again",
-                  type: "postback",
-                  payload: "SHOTI_RETRY",
-                },
-              ],
-            },
-            threadID,
-            () => fs.existsSync(filePath) && fs.unlinkSync(filePath)
-          );
-        });
-
-        writer.on("error", (err) => {
-          console.error("❌ Write error:", err);
-          api.sendMessage("⚠️ Failed to save the video.", threadID, messageID);
-        });
-      } catch (err) {
-        console.error("❌ TikTok error:", err);
+      const response = await axios.get("https://apis-rho-nine.vercel.app/tikrandom");
+      if (!response.data?.playUrl) {
         api.setMessageReaction("❌", messageID, () => {}, true);
-        api.sendMessage("⚠️ Could not fetch video. Please try again later.", threadID, messageID);
+        return api.sendMessage("⚠️ No video URL from API.", threadID, messageID);
       }
-    };
 
-    // Handle retry button
-    if (event.postback && event.postback.payload === "SHOTI_RETRY") {
-      return sendVideo();
+      const videoUrl = response.data.playUrl;
+      const filePath = path.join(__dirname, "tikrandom.mp4");
+      const writer = fs.createWriteStream(filePath);
+
+      const videoResponse = await axios({ url: videoUrl, method: "GET", responseType: "stream" });
+      videoResponse.data.pipe(writer);
+
+      writer.on("finish", () => {
+        api.setMessageReaction("✅", messageID, () => {}, true);
+        api.sendMessage({ body: "🎥 Here's a random TikTok video:", attachment: fs.createReadStream(filePath) }, threadID, () => {
+          fs.unlink(filePath, () => {});
+        });
+      });
+
+      writer.on("error", () => {
+        api.setMessageReaction("❌", messageID, () => {}, true);
+        api.sendMessage("❌ Failed to download video.", threadID, messageID);
+      });
+
+    } catch (err) {
+      api.setMessageReaction("❌", messageID, () => {}, true);
+      api.sendMessage("❌ Error: " + err.message, threadID, messageID);
     }
-
-    // First request
-    return sendVideo();
-  },
+  }
 };
