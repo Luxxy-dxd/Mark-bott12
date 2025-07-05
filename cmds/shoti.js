@@ -2,75 +2,78 @@ const fs = require("fs");
 const axios = require("axios");
 const path = require("path");
 
-module.exports = {
-    name: "shoti",
-    usePrefix: false,
-    usage: "shoti",
-    version: "1.0",
-    cooldown: 5,
-    admin: false,
+module.exports.config = {
+  name: "shoti",
+  usePrefix: false,
+  usage: "shoti",
+  version: "1.1",
+  admin: false,
+  cooldown: 5
+};
 
-    execute: async ({ api, event }) => {
-        const { threadID, messageID } = event;
+async function sendVideo(api, threadID, messageID) {
+  const filePath = path.join(__dirname, "tikrandom.mp4");
 
-        try {
-            // Set reaction to indicate processing
-            api.setMessageReaction("⏳", messageID, () => {}, true);
+  try {
+    await api.setMessageReaction("⏳", messageID, () => {}, true);
 
-            // Fetch random TikTok video
-            const response = await axios.get("https://apis-rho-nine.vercel.app/tikrandom");
+    const response = await axios.get("https://apis-rho-nine.vercel.app/tikrandom");
+    if (!response.data || !response.data.playUrl) {
+      await api.setMessageReaction("❌", messageID, () => {}, true);
+      return api.sendMessage("⚠️ No video URL received from API.", threadID, messageID);
+    }
 
-            console.log("📜 API Response:", response.data);
+    const videoUrl = response.data.playUrl;
+    const videoResponse = await axios({
+      url: videoUrl,
+      method: "GET",
+      responseType: "stream"
+    });
 
-            if (!response.data || !response.data.playUrl) {
-                api.setMessageReaction("❌", messageID, () => {}, true);
-                return api.sendMessage("⚠️ No video URL received from API.", threadID, messageID);
-            }
+    const writer = fs.createWriteStream(filePath);
+    videoResponse.data.pipe(writer);
 
-            const videoUrl = response.data.playUrl;
-            const filePath = path.join(__dirname, "tikrandom.mp4");
+    writer.on("finish", async () => {
+      await api.setMessageReaction("✅", messageID, () => {}, true);
 
-            // Download the video
-            const writer = fs.createWriteStream(filePath);
-            const videoResponse = await axios({
-                url: videoUrl,
-                method: "GET",
-                responseType: "stream"
-            });
-
-            videoResponse.data.pipe(writer);
-
-            writer.on("finish", async () => {
-                api.setMessageReaction("✅", messageID, () => {}, true);
-
-                const msg = {
-                    body: "🎥 Here is a random TikTok video!\n",
-                    attachment: fs.createReadStream(filePath),
-                };
-
-                api.sendMessage(msg, threadID, (err) => {
-                    if (err) {
-                        console.error("❌ Error sending video:", err);
-                        return api.sendMessage("⚠️ Failed to send video.", threadID);
-                    }
-
-                    // Delete file after sending
-                    fs.unlink(filePath, (unlinkErr) => {
-                        if (unlinkErr) console.error("❌ Error deleting file:", unlinkErr);
-                    });
-                });
-            });
-
-            writer.on("error", (err) => {
-                console.error("❌ Error downloading video:", err);
-                api.setMessageReaction("❌", messageID, () => {}, true);
-                api.sendMessage("⚠️ Failed to download video.", threadID, messageID);
-            });
-
-        } catch (error) {
-            console.error("❌ Error fetching video:", error);
-            api.setMessageReaction("❌", messageID, () => {}, true);
-            api.sendMessage(`⚠️ Could not fetch the video. Error: ${error.message}`, threadID, messageID);
+      api.sendMessage({
+        body: "🎥 Here is a random TikTok video!\n",
+        attachment: fs.createReadStream(filePath),
+        buttons: [
+          { type: "reply", label: "🎬 Again", id: "SHOTI_AGAIN" }
+        ]
+      }, threadID, (err) => {
+        if (err) {
+          console.error("❌ Error sending video:", err);
+          api.sendMessage("⚠️ Failed to send video.", threadID);
         }
-    },
+        fs.unlink(filePath, (unlinkErr) => {
+          if (unlinkErr) console.error("❌ Error deleting file:", unlinkErr);
+        });
+      }, messageID);
+    });
+
+    writer.on("error", async (err) => {
+      console.error("❌ Error downloading video:", err);
+      await api.setMessageReaction("❌", messageID, () => {}, true);
+      api.sendMessage("⚠️ Failed to download video.", threadID, messageID);
+    });
+
+  } catch (error) {
+    console.error("❌ Error fetching video:", error);
+    await api.setMessageReaction("❌", messageID, () => {}, true);
+    api.sendMessage(`⚠️ Could not fetch the video. Error: ${error.message}`, threadID, messageID);
+  }
+}
+
+module.exports.run = async function({ api, event }) {
+  await sendVideo(api, event.threadID, event.messageID);
+};
+
+module.exports.handleEvent = async function({ api, event }) {
+  const { body, threadID, messageID } = event;
+
+  if (body === "SHOTI_AGAIN") {
+    await sendVideo(api, threadID, messageID);
+  }
 };
