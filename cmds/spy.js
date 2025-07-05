@@ -1,53 +1,92 @@
-module.exports.config = {
+const axios = require("axios");
+
+module.exports = {
   name: "spy",
   usePrefix: false,
-  usage: "spy [uid | profile link | mention | reply]",
-  version: "1.0",
+  usage: "spy [@mention|profile_link|UID]",
+  version: "2.0",
   admin: false,
-  cooldown: 2
-};
+  cooldown: 5,
 
-module.exports.run = async function ({ api, event, args, usersData }) {
-  const { threadID, messageID, senderID, messageReply, type, mentions } = event;
-  let uid;
+  execute: async ({ api, event, args, usersData }) => {
+    const { threadID, messageID, senderID, messageReply, mentions } = event;
 
-  if (args[0]) {
-    if (/^\d+$/.test(args[0])) {
-      uid = args[0];
-    } else {
-      const match = args[0].match(/profile\.php\?id=(\d+)/);
-      if (match) uid = match[1];
+    let targetUID = senderID;
+
+    // 1. Mention
+    if (Object.keys(mentions).length > 0) {
+      targetUID = Object.keys(mentions)[0];
     }
-  }
 
-  if (!uid) {
-    uid = type === "message_reply"
-      ? messageReply.senderID
-      : Object.keys(mentions)[0] || senderID;
-  }
+    // 2. Reply
+    else if (messageReply) {
+      targetUID = messageReply.senderID;
+    }
 
-  api.getUserInfo(uid, async (err, result) => {
-    if (err) return api.sendMessage("❌ Failed to get user info.", threadID, messageID);
+    // 3. Profile link or direct UID
+    else if (args[0]) {
+      if (/^\d+$/.test(args[0])) {
+        targetUID = args[0];
+      } else {
+        const match = args[0].match(/(?:id=)?(\d{6,})/);
+        if (match) targetUID = match[1];
+      }
+    }
 
-    const user = result[uid];
-    const avatar = await usersData.getAvatarUrl(uid);
+    // 4. Fallback
+    if (!targetUID) {
+      return api.sendMessage("⚠️ Could not identify the target user.", threadID, messageID);
+    }
 
-    let gender = "Unknown";
-    if (user.gender === 1) gender = "Girl";
-    else if (user.gender === 2) gender = "Boy";
+    try {
+      const userInfo = await new Promise((resolve, reject) =>
+        api.getUserInfo(targetUID, (err, res) => {
+          if (err || !res?.[targetUID]) reject(err || "User not found");
+          else resolve(res[targetUID]);
+        })
+      );
 
-    const info = `
-📛 Name: ${user.name}
-🌐 Profile: ${user.profileUrl}
-⚧️ Gender: ${gender}
-👤 Type: ${user.type}
-👥 Friend: ${user.isFriend ? "Yes" : "No"}
-🎂 Birthday Today: ${user.isBirthday ? "Yes" : "No"}
-    `.trim();
+      const avatarUrl = await usersData.getAvatarUrl(targetUID);
 
-    return api.sendMessage({
-      body: info,
-      attachment: await global.utils.getStreamFromURL(avatar)
-    }, threadID, messageID);
-  });
+      const gender =
+        userInfo.gender === 1
+          ? "🚺 Female"
+          : userInfo.gender === 2
+          ? "🚹 Male"
+          : "⚪ Unknown";
+
+      const response = `
+╔════════════════════╗
+      🕵️ USER SPY REPORT
+╚════════════════════╝
+
+👤 Name       : ${userInfo.name}
+🆔 UID        : ${targetUID}
+🔗 Profile    : https://facebook.com/${targetUID}
+⚧️ Gender     : ${gender}
+🎂 Birthday   : ${userInfo.isBirthday ? "🎉 Yes" : "❌ No"}
+🤝 Is Friend  : ${userInfo.isFriend ? "✅ Yes" : "❌ No"}
+🏷️ Type       : ${userInfo.type || "Unknown"}
+`;
+
+      return api.sendMessage(
+        {
+          body: response,
+          attachment: await global.utils.getStreamFromURL(avatarUrl),
+          buttons: [
+            {
+              label: "📂 View Profile",
+              type: "web_url",
+              url: `https://facebook.com/${targetUID}`,
+            },
+          ],
+        },
+        threadID,
+        messageID
+      );
+    } catch (err) {
+      console.error("❌ Spy error:", err);
+      return api.sendMessage("❌ Failed to retrieve user info.", threadID, messageID);
+    }
+  },
 };
