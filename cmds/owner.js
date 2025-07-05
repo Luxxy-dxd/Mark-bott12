@@ -1,4 +1,6 @@
-const axios = require('axios');
+const axios = require("axios");
+const fs = require("fs");
+const path = require("path");
 
 module.exports = {
   name: "owner",
@@ -8,7 +10,7 @@ module.exports = {
   admin: false,
   cooldown: 5,
 
-  execute: async function({ api, event }) {
+  execute: async function ({ api, event }) {
     const { threadID, messageID } = event;
 
     const ownerInfo = {
@@ -21,6 +23,7 @@ module.exports = {
     };
 
     const videoURL = 'https://i.imgur.com/DDO686J.mp4';
+    const tempPath = path.join(__dirname, "owner_media.mp4");
 
     const message = `
 ╔══════════════════════╗
@@ -37,15 +40,29 @@ module.exports = {
     `.trim();
 
     try {
-      const stream = await global.utils.getStreamFromURL(videoURL);
+      const response = await axios({
+        url: videoURL,
+        method: "GET",
+        responseType: "stream",
+      });
 
-      await api.sendMessage({
-        body: message,
-        attachment: stream
-      }, threadID, messageID);
+      const writer = fs.createWriteStream(tempPath);
+      response.data.pipe(writer);
+
+      writer.on("finish", () => {
+        api.sendMessage({
+          body: message,
+          attachment: fs.createReadStream(tempPath),
+        }, threadID, () => fs.unlinkSync(tempPath), messageID);
+      });
+
+      writer.on("error", (err) => {
+        console.error("❌ Error writing file:", err);
+        api.sendMessage("❌ Failed to send owner info.", threadID, messageID);
+      });
 
     } catch (err) {
-      console.error('[OWNER CMD ERROR]', err);
+      console.error("[OWNER CMD ERROR]", err);
       return api.sendMessage("❌ Unable to load owner info or video.", threadID, messageID);
     }
   }
