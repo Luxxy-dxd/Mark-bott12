@@ -1,52 +1,23 @@
 module.exports = {
   name: "id",
   usePrefix: false,
-  usage: "id [@mention or reply or link or UID]",
-  version: "2.0",
+  usage: "id [@mention]",
+  version: "1.0",
   admin: false,
-  cooldown: 5,
+  cooldown: 10,
 
-  execute: async ({ api, event, args }) => {
-    const { threadID, messageID, senderID, mentions, type, messageReply } = event;
+  execute: async ({ api, event, mentions }) => {
+    const { threadID, messageID, senderID } = event;
 
-    let targetID = senderID;
-    let targetName = "You";
-
-    // Mentioned
+    let uid, name;
     if (Object.keys(mentions).length > 0) {
-      targetID = Object.keys(mentions)[0];
-      targetName = mentions[targetID].replace(/@/g, "");
+      uid = Object.keys(mentions)[0];
+      name = mentions[uid].replace("@", "") || "User";
+    } else {
+      uid = senderID;
+      name = "You";
     }
 
-    // Replied user
-    else if (type === "message_reply") {
-      targetID = messageReply.senderID;
-      targetName = messageReply.senderID === senderID ? "You" : "User from replied message";
-    }
-
-    // Direct UID or profile link
-    else if (args[0]) {
-      const arg = args[0];
-      if (/^\d{5,}$/.test(arg)) {
-        targetID = arg;
-        targetName = "User";
-      } else {
-        const match = arg.match(/id=(\d{5,})/); // profile.php?id=
-        if (match) {
-          targetID = match[1];
-          targetName = "User";
-        }
-      }
-    }
-
-    const profileLink = `https://facebook.com/${targetID}`;
-
-    return api.sendMessage({
-      body: `🔍 UID Information\n\n👤 Name: ${targetName}\n🆔 UID: ${targetID}\n🔗 Profile: ${profileLink}`,
-      buttons: [
-        { label: "📋 Copy UID", type: "reply", payload: targetID },
-        { label: "🌐 View Profile", type: "url", url: profileLink }
-      ]
-    }, threadID, messageID);
+    api.sendMessage(`🔍 Facebook UID for ${name}: ${uid}`, threadID, messageID);
   }
 };
