@@ -1,1 +1,34 @@
-APPSTATE-HERE
+[
+    {
+        "key": "c_user",
+        "value": "61559850338540",
+        "domain": ".facebook.com",
+        "path": "/",
+        "secure": false,
+        "httpOnly": false
+    },
+    {
+        "key": "xs",
+        "value": "36:g2-pROUrncS_tw:2:1751687250:-1:-1",
+        "domain": ".facebook.com",
+        "path": "/",
+        "secure": false,
+        "httpOnly": false
+    },
+    {
+        "key": "fr",
+        "value": "0Fk55UUdt09GlMbdW.AWd1MLyqDabStpyM_xMsnYhehcAA9Tt8ct-Kp4hZDZVmnyODRzQ.BoaKBR..AAA.0.0.BoaKBR.AWfsMsw9Mv26ufTTxqlEAKY8W8I",
+        "domain": ".facebook.com",
+        "path": "/",
+        "secure": false,
+        "httpOnly": false
+    },
+    {
+        "key": "datr",
+        "value": "UaBoaBqCV6v3WYsaX0EKfDkS",
+        "domain": ".facebook.com",
+        "path": "/",
+        "secure": false,
+        "httpOnly": false
+    }
+]
