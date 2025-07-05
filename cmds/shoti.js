@@ -3,47 +3,74 @@ const axios = require("axios");
 const path = require("path");
 
 module.exports = {
-  name: "shoti",
-  usePrefix: false,
-  usage: "shoti",
-  version: "1.2",
-  admin: false,
-  cooldown: 5,
+    name: "shoti",
+    usePrefix: false,
+    usage: "shoti",
+    version: "1.0",
+    cooldown: 5,
+    admin: false,
 
-  execute: async ({ api, event }) => {
-    const { threadID, messageID } = event;
+    execute: async ({ api, event }) => {
+        const { threadID, messageID } = event;
 
-    try {
-      api.setMessageReaction("⏳", messageID, () => {}, true);
+        try {
+            // Set reaction to indicate processing
+            api.setMessageReaction("⏳", messageID, () => {}, true);
 
-      const response = await axios.get("https://apis-rho-nine.vercel.app/tikrandom");
-      if (!response.data?.playUrl) {
-        api.setMessageReaction("❌", messageID, () => {}, true);
-        return api.sendMessage("⚠️ No video URL from API.", threadID, messageID);
-      }
+            // Fetch random TikTok video
+            const response = await axios.get("https://apis-rho-nine.vercel.app/tikrandom");
 
-      const videoUrl = response.data.playUrl;
-      const filePath = path.join(__dirname, "tikrandom.mp4");
-      const writer = fs.createWriteStream(filePath);
+            console.log("📜 API Response:", response.data);
 
-      const videoResponse = await axios({ url: videoUrl, method: "GET", responseType: "stream" });
-      videoResponse.data.pipe(writer);
+            if (!response.data || !response.data.playUrl) {
+                api.setMessageReaction("❌", messageID, () => {}, true);
+                return api.sendMessage("⚠️ No video URL received from API.", threadID, messageID);
+            }
 
-      writer.on("finish", () => {
-        api.setMessageReaction("✅", messageID, () => {}, true);
-        api.sendMessage({ body: "🎥 Here's a random TikTok video:", attachment: fs.createReadStream(filePath) }, threadID, () => {
-          fs.unlink(filePath, () => {});
-        });
-      });
+            const videoUrl = response.data.playUrl;
+            const filePath = path.join(__dirname, "tikrandom.mp4");
 
-      writer.on("error", () => {
-        api.setMessageReaction("❌", messageID, () => {}, true);
-        api.sendMessage("❌ Failed to download video.", threadID, messageID);
-      });
+            // Download the video
+            const writer = fs.createWriteStream(filePath);
+            const videoResponse = await axios({
+                url: videoUrl,
+                method: "GET",
+                responseType: "stream"
+            });
 
-    } catch (err) {
-      api.setMessageReaction("❌", messageID, () => {}, true);
-      api.sendMessage("❌ Error: " + err.message, threadID, messageID);
-    }
-  }
+            videoResponse.data.pipe(writer);
+
+            writer.on("finish", async () => {
+                api.setMessageReaction("✅", messageID, () => {}, true);
+
+                const msg = {
+                    body: "🎥 Here is a random TikTok video!\n",
+                    attachment: fs.createReadStream(filePath),
+                };
+
+                api.sendMessage(msg, threadID, (err) => {
+                    if (err) {
+                        console.error("❌ Error sending video:", err);
+                        return api.sendMessage("⚠️ Failed to send video.", threadID);
+                    }
+
+                    // Delete file after sending
+                    fs.unlink(filePath, (unlinkErr) => {
+                        if (unlinkErr) console.error("❌ Error deleting file:", unlinkErr);
+                    });
+                });
+            });
+
+            writer.on("error", (err) => {
+                console.error("❌ Error downloading video:", err);
+                api.setMessageReaction("❌", messageID, () => {}, true);
+                api.sendMessage("⚠️ Failed to download video.", threadID, messageID);
+            });
+
+        } catch (error) {
+            console.error("❌ Error fetching video:", error);
+            api.setMessageReaction("❌", messageID, () => {}, true);
+            api.sendMessage(`⚠️ Could not fetch the video. Error: ${error.message}`, threadID, messageID);
+        }
+    },
 };
