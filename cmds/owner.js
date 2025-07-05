@@ -1,6 +1,4 @@
 const axios = require('axios');
-const fs = require('fs');
-const path = require('path');
 
 module.exports = {
   name: "owner",
@@ -23,16 +21,8 @@ module.exports = {
     };
 
     const videoURL = 'https://i.imgur.com/DDO686J.mp4';
-    const cachePath = path.join(__dirname, 'cache');
-    const videoPath = path.join(cachePath, 'owner_video.mp4');
 
-    try {
-      if (!fs.existsSync(cachePath)) fs.mkdirSync(cachePath);
-
-      const buffer = (await axios.get(videoURL, { responseType: 'arraybuffer' })).data;
-      fs.writeFileSync(videoPath, Buffer.from(buffer));
-
-      const message = `
+    const message = `
 ╔══════════════════════╗
    👑 BOT OWNER INFO 👑
 ╚══════════════════════╝
@@ -44,19 +34,19 @@ module.exports = {
 🐾 Nick   : ${ownerInfo.nick}
 
 📩 Contact Owner: ${ownerInfo.fb}
-      `.trim();
+    `.trim();
 
-      // Send video with info as caption
+    try {
+      const stream = await global.utils.getStreamFromURL(videoURL);
+
       await api.sendMessage({
         body: message,
-        attachment: fs.createReadStream(videoPath)
-      }, threadID, () => {
-        fs.unlinkSync(videoPath);
-      }, messageID);
+        attachment: stream
+      }, threadID, messageID);
 
     } catch (err) {
       console.error('[OWNER CMD ERROR]', err);
-      return api.sendMessage("❌ Unable to load owner info.", threadID, messageID);
+      return api.sendMessage("❌ Unable to load owner info or video.", threadID, messageID);
     }
   }
 };
