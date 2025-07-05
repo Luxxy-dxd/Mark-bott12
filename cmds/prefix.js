@@ -16,8 +16,9 @@ module.exports = {
     execute: async ({ api, event }) => {
         const { threadID, messageID } = event;
         const botPrefix = config.prefix || "/";
+        const owner = "Luffy";
         const botName = config.botName || "My Bot";
-        const gifUrl = "https://media.giphy.com/media/1UwhOK8VX95TcfPBML/giphy.gif";
+        const gifUrl = "https://media3.giphy.com/media/v1.Y2lkPTZjMDliOTUycXo1ZWdpaWswZ2l3Z2Y3aWN2OGU0dTczazh5NW15dHJvaTJ3emE4bSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/u2LJ0n4lx6jF6/giphy.gif";
         const tempFilePath = path.join(__dirname, "prefix.gif");
 
         try {
@@ -34,7 +35,7 @@ module.exports = {
             writer.on("finish", () => {
                 api.sendMessage(
                     {
-                        body: ` Bot Information\n📌Prefix: ${botPrefix}\n🆔 Bot Name: ${botName}\n\nThanks for using my Fbot`,
+                        body: ` Bot Information\n📌Prefix: ${botPrefix}\n🆔 Bot Name: ${botName}\n\n 🙍Owner ; ${owner}\n\n`,
                         attachment: fs.createReadStream(tempFilePath),
                     },
                     threadID,
