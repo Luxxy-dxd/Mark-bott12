@@ -1,93 +1,54 @@
-const fs = require("fs");
-const path = require("path");
-const qrcode = require("qrcode");
-const { createCanvas, loadImage } = require("canvas");
-const jsQR = require("jsqr");
+const qrcode = require('qrcode');
+const { createCanvas, loadImage } = require('canvas');
+const jsQR = require('jsqr');
+const fs = require('fs');
+const path = require('path');
 
 module.exports = {
   name: "qrcode",
   usePrefix: false,
-  usage: "qrcode make [text] | qrcode scan (with reply)",
-  version: "2.0",
+  usage: "qrcode make [text] | qrcode scan (reply to QR image)",
+  version: "1.0",
   admin: false,
   cooldown: 5,
 
-  execute: async ({ api, event, args }) => {
-    const { threadID, messageID, type, messageReply, senderID } = event;
-    const action = args[0];
-    const content = args.slice(1).join(" ");
-    const tempPath = path.join(__dirname, `qr-${senderID}.png`);
+  execute: async ({ api, event, args, message }) => {
+    const command = args[0];
+    const text = args.slice(1).join(" ");
 
-    if (!action) {
-      return api.sendMessage(
-        {
-          body: "⚙️ Choose an action for QR Code:",
-          buttons: [
-            { label: "🧾 Make QR", type: "postback", payload: "QR_MAKE" },
-            { label: "📷 Scan QR", type: "postback", payload: "QR_SCAN" }
-          ]
-        },
-        threadID,
-        messageID
-      );
-    }
-
-    if (action === "make") {
-      if (!content) return api.sendMessage("❌ Please provide text to encode.\nUsage: qrcode make [text]", threadID, messageID);
-
-      try {
-        await qrcode.toFile(tempPath, content);
-        return api.sendMessage({
-          body: `✅ QR Code generated for:\n"${content}"`,
-          attachment: fs.createReadStream(tempPath)
-        }, threadID, () => fs.unlinkSync(tempPath), messageID);
-      } catch (err) {
-        console.error("QR Code Generation Error:", err);
-        return api.sendMessage("❌ Failed to generate QR code.", threadID, messageID);
-      }
-    }
-
-    if (action === "scan") {
+    if (command === "make") {
+      if (!text) return message.reply("Please provide text to encode.");
+      const filePath = path.join(__dirname, `${Date.now()}.png`);
+      await qrcode.toFile(filePath, text);
+      message.reply({ body: "Here's your QR code:", attachment: fs.createReadStream(filePath) }, () => fs.unlinkSync(filePath));
+    } 
+    else if (command === "scan") {
       let imageUrl;
-
-      if (type === "message_reply" && messageReply.attachments?.[0]?.type === "photo") {
-        imageUrl = messageReply.attachments[0].url;
+      if (event.type === "message_reply") {
+        imageUrl = event.messageReply.attachments[0]?.url;
+      } else if (args[1]?.match(/https?:\/\/.*\.(jpg|jpeg|png)/i)) {
+        imageUrl = args[1];
       } else {
-        return api.sendMessage("📷 Please reply to a QR image to scan.", threadID, messageID);
+        return message.reply("Please reply to an image or provide a valid image URL.");
       }
 
       try {
-        const image = await loadImage(imageUrl);
-        const canvas = createCanvas(image.width, image.height);
-        const ctx = canvas.getContext("2d");
-
-        ctx.drawImage(image, 0, 0);
-        const imageData = ctx.getImageData(0, 0, image.width, image.height);
-        const code = jsQR(imageData.data, imageData.width, imageData.height);
-
-        if (!code) return api.sendMessage("❌ Failed to decode QR Code.", threadID, messageID);
-
-        return api.sendMessage(`📤 QR Code Content:\n\n${code.data}`, threadID, messageID);
+        const img = await loadImage(imageUrl);
+        const canvas = createCanvas(img.width, img.height);
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        const imageData = ctx.getImageData(0, 0, img.width, img.height);
+        const code = jsQR(imageData.data, img.width, img.height);
+        if (code) {
+          message.reply("Decoded QR code text:\n" + code.data);
+        } else {
+          message.reply("Could not decode QR code.");
+        }
       } catch (err) {
-        console.error("QR Decode Error:", err);
-        return api.sendMessage("❌ Error decoding QR code.", threadID, messageID);
+        message.reply("Error decoding QR code.");
       }
-    }
-
-    return api.sendMessage("⚠️ Invalid option. Use:\n- qrcode make [text]\n- qrcode scan (with reply)", threadID, messageID);
-  },
-
-  onPostback: async ({ api, event }) => {
-    const { threadID, messageID, postback, senderID } = event;
-    const payload = postback?.payload;
-    const tempPath = path.join(__dirname, `qr-${senderID}.png`);
-
-    if (payload === "QR_MAKE") {
-      return api.sendMessage("✏️ Enter the text you want to convert to a QR code:\nUsage: `qrcode make your text`", threadID, messageID);
-    }
-
-    if (payload === "QR_SCAN") {
-      return api.sendMessage("📸 Please reply to a QR image with:\n`qrcode scan`", threadID, messageID);
+    } else {
+      message.reply("Invalid command. Usage:\nqrcode make [text]\nqrcode scan (reply to image or URL)");
     }
   }
 };
